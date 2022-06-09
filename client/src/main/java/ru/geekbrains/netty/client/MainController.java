@@ -26,15 +26,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainController implements Initializable {
 
-    private String nick;
-    private SecretKey key = AESUtil.generateKey(128);
-    private String algorithm = "AES/CBC/PKCS5Padding";
-    private IvParameterSpec ivParameterSpec = AESUtil.generateIv();
+    private static String nick;
+    private static SecretKey key;
+
+    static {
+        try {
+            key = AESUtil.generateKey(128);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static String algorithm = "AES/CBC/PKCS5Padding";
+    private static IvParameterSpec ivParameterSpec = AESUtil.generateIv();
 
     private static final AtomicInteger count = new AtomicInteger(1);
     private static int fileID;
 
     @FXML
+    static
     ListView<String> clientFilesList;
 
     @FXML
@@ -71,6 +81,7 @@ public class MainController implements Initializable {
     Button registerButton;
 
     public MainController() throws NoSuchAlgorithmException {
+        testSonar();
     }
 
 
@@ -191,6 +202,10 @@ public class MainController implements Initializable {
         }
     }
 
+    public void testSonar(){
+
+    }
+
     public void deleteFromEncryptedFilesList(){
         try {
             Files.delete(Paths.get("client" + nick + "/encryptedFiles/" + clientFilesList.getSelectionModel().getSelectedItem()));
@@ -262,7 +277,6 @@ public class MainController implements Initializable {
         String fileExtension = getExtension(encryptedFile.getName());
 
         Path newPath = Paths.get("client" + nick + "/" + "decrypted_" + fileID + "." + fileExtension);
-        Path sourse = Paths.get("client"+ nick + "/");
 
         AESUtil.decryptFile(algorithm,key,ivParameterSpec,encryptedFile,newPath.toFile());
 
@@ -285,7 +299,7 @@ public class MainController implements Initializable {
             return fileName.substring(dotInd+1).toLowerCase();
     }
 
-    public void EncryptUserFile(ActionEvent actionEvent) throws IOException, NoSuchPaddingException,
+    public static void EncryptUserFile(ActionEvent actionEvent) throws IOException, NoSuchPaddingException,
             NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
             BadPaddingException, IllegalBlockSizeException {
         fileID = count.incrementAndGet();
@@ -311,7 +325,7 @@ public class MainController implements Initializable {
             try {
                 String userChoise = clientFilesList.getSelectionModel().getSelectedItem();
                 clientFilesList.getItems().clear();
-                if(userChoise.endsWith(".txt") | userChoise.endsWith(".txt.encrypted") | userChoise.endsWith(".encrypted")){
+                if(userChoise.endsWith(".txt") || userChoise.endsWith(".txt.encrypted") || userChoise.endsWith(".encrypted")){
                     showAlert();
                 }else {
                     Files.list(Paths.get("client" + nick + "/" + userChoise)).map(p -> p.getFileName().toString()).
@@ -332,7 +346,7 @@ public class MainController implements Initializable {
         alert.showAndWait();
     }
 
-    public void showEncryptionSuccess(){
+    public static void showEncryptionSuccess(){
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Шифрование");
         alert.setHeaderText("Шифрование файла");

@@ -1,8 +1,8 @@
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\RefreshServerFileListMessage.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\RegistrationMessage.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\DownloadMessage.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\FileMessage.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\FileRequest.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\AuthMessage.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\AbstractMessage.java
-C:\Users\Comra\IdeaProjects\file_transfer2\common\src\main\java\ru\geekbrains\netty\common\DeleteMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\DownloadMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\AbstractMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\RefreshServerFileListMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\FileRequest.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\FileMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\AuthMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\RegistrationMessage.java
+C:\Users\Comra\IdeaProjects\CloudStorageStaticCode\common\src\main\java\ru\geekbrains\netty\common\DeleteMessage.java
