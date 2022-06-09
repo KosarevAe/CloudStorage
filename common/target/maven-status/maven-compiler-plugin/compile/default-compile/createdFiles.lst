@@ -1,0 +1,8 @@
+ru\geekbrains\netty\common\DeleteMessage.class
+ru\geekbrains\netty\common\RegistrationMessage.class
+ru\geekbrains\netty\common\RefreshServerFileListMessage.class
+ru\geekbrains\netty\common\AuthMessage.class
+ru\geekbrains\netty\common\FileRequest.class
+ru\geekbrains\netty\common\AbstractMessage.class
+ru\geekbrains\netty\common\FileMessage.class
+ru\geekbrains\netty\common\DownloadMessage.class

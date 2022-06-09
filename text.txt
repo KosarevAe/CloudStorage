@@ -1,0 +1,629 @@
+package ru.geekbrains.netty.client;
+
+import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
+
+public class MainClient extends Application {
+    @Override
+    public void start(Stage primaryStage) throws Exception{
+        FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("/main_window.fxml"));
+        Parent root = fxmlLoader.load();
+        primaryStage.setTitle("Client");
+        primaryStage.setScene(new Scene(root, 600, 400));
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
+
+package ru.geekbrains.netty.client;
+
+import ru.geekbrains.netty.common.*;
+import javafx.application.Platform;
+import javafx.event.ActionEvent;
+import javafx.fxml.FXML;
+import javafx.fxml.Initializable;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+
+import java.io.IOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.ResourceBundle;
+
+public class MainController implements Initializable {
+
+    private String nick;
+
+    @FXML
+    Button refreshLocalFilesList;
+
+    @FXML
+    Button refreshServerFileList;
+
+    @FXML
+    ListView<String> clientFilesList;
+
+    @FXML
+    ListView<String> serverFilesList;
+
+    @FXML
+    HBox cloudPanel;
+
+    @FXML
+    HBox authPanel;
+
+    @FXML
+    TextField loginField;
+
+    @FXML
+    PasswordField passwordField;
+
+    @FXML
+    Button authLabel;
+
+
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        setAuthorized(false);
+        Network.start();
+        Thread thread = new Thread(() -> {
+
+            try {
+                while (true) {
+                    AbstractMessage abstractMessage = Network.readObject();
+                    if (abstractMessage instanceof AuthMessage) {
+                        AuthMessage authMessage = (AuthMessage) abstractMessage;
+                        if (authMessage.message.startsWith("/authOk")) {
+                            setAuthorized(true);
+                            nick = authMessage.message.split(" ")[1];
+                            System.out.println("Подключился клиент " + nick);
+                            break;
+                        }
+                        if ("/null_userId".equals(authMessage.message)) {
+                            Platform.runLater(() -> authLabel.setText("Неверный логин или пароль."));
+                        }
+                    }
+                }
+                Network.sendMsg(new RefreshServerFileListMessage());
+                refreshLocalFilesList();
+                while (true) {
+                    AbstractMessage abstractMessage = Network.readObject();
+                    if (abstractMessage instanceof FileMessage) {
+                        FileMessage fileMessage = (FileMessage) abstractMessage;
+                        if (Files.exists(Paths.get("client" + nick + "/" + fileMessage.getFilename()))){
+                        Files.write(Paths.get("client" + nick + "/" + fileMessage.getFilename()),
+                                fileMessage.getData(), StandardOpenOption.CREATE);
+                        refreshLocalFilesList();}
+                    }
+                    if (abstractMessage instanceof RefreshServerFileListMessage) {
+                        RefreshServerFileListMessage refreshServerMessage = (RefreshServerFileListMessage) abstractMessage;
+                        refreshServerFileList(refreshServerMessage.getServerFileList());
+                    }
+                }
+            } catch (ClassNotFoundException | IOException e) {
+                e.printStackTrace();
+            } finally {
+                Network.stop();
+            }
+        });
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void setAuthorized(boolean isAuthorized) {
+        if (!isAuthorized) {
+            authPanel.setVisible(true);
+            authPanel.setManaged(true);
+            cloudPanel.setVisible(false);
+            cloudPanel.setManaged(false);
+        } else {
+            authPanel.setVisible(false);
+            authPanel.setManaged(false);
+            cloudPanel.setVisible(true);
+            cloudPanel.setManaged(true);
+        }
+    }
+
+    public void tryToAuth() {
+        Network.sendMsg(new AuthMessage(loginField.getText(), passwordField.getText()));
+        loginField.clear();
+        passwordField.clear();
+    }
+
+    public void pressOnDownloadButton(ActionEvent actionEvent) {
+        Network.sendMsg(new DownloadMessage(serverFilesList.getSelectionModel().getSelectedItem()));
+    }
+
+    public void pressOnSendToCloudButton(ActionEvent actionEvent) {
+        try {
+            Network.sendMsg(new FileMessage(Paths.get("client" + nick + "/"
+                    + clientFilesList.getSelectionModel().getSelectedItem())));
+        } catch (IOException e) {
+            e.printStackTrace();
+
+        }
+    }
+
+    public void deleteFromClient(ActionEvent actionEvent) {
+        //    Button sourceButton = (Button) actionEvent.getSource();
+        //     if(deleteFromClient.equals(sourceButton)){
+        try {
+            Files.delete(Paths.get("client" + nick + "/" + clientFilesList.getSelectionModel().getSelectedItem()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        refreshLocalFilesList();
+    }
+
+    public void deleteFromServer(ActionEvent actionEvent) {
+        Network.sendMsg(new DeleteMessage(serverFilesList.getSelectionModel().getSelectedItem()));
+    }
+
+
+    private void refreshLocalFilesList() {
+        updateUI(() -> {
+            try {
+                clientFilesList.getItems().clear();
+                Files.list(Paths.get("client" + nick)).map(p -> p.getFileName().toString()).
+                        forEach(o -> clientFilesList.getItems().add(o));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void refreshServerFileList(ArrayList<String> fileList) {
+        updateUI(() -> { serverFilesList.getItems().clear();
+            serverFilesList.getItems().addAll(fileList);
+        });
+    }
+
+    private static void updateUI(Runnable r) {
+        if (Platform.isFxApplicationThread()) {
+            r.run();
+        } else {
+            Platform.runLater(r);
+        }
+    }
+
+
+}
+
+package ru.geekbrains.netty.client;
+
+import io.netty.handler.codec.serialization.ObjectDecoderInputStream;
+import io.netty.handler.codec.serialization.ObjectEncoderOutputStream;
+import ru.geekbrains.netty.common.AbstractMessage;
+
+import java.io.IOException;
+import java.net.Socket;
+
+public class Network {
+    private static Socket socket;
+    private static ObjectEncoderOutputStream out;
+    private static ObjectDecoderInputStream in;
+
+    static void start() {
+        try {
+            socket = new Socket("localhost", 8189);
+            out = new ObjectEncoderOutputStream(socket.getOutputStream());
+            in = new ObjectDecoderInputStream(socket.getInputStream(), 50 * 1024 * 1024);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    static void stop() {
+        try {
+            out.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            in.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static boolean sendMsg(AbstractMessage msg) {
+        try {
+            out.writeObject(msg);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    static AbstractMessage readObject() throws ClassNotFoundException, IOException {
+        Object obj = in.readObject();
+        return (AbstractMessage) obj;
+    }
+}
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<?import javafx.geometry.Insets?>
+
+
+<?import javafx.scene.shape.Line?>
+<VBox alignment="center" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/8.0.112-ea" fx:controller=
+        "ru.geekbrains.netty.client.MainController">
+
+    <HBox VBox.vgrow="ALWAYS" fx:id="authPanel">
+        <TextField fx:id="loginField" promptText="Логин" HBox.hgrow="ALWAYS"/>
+        <PasswordField fx:id="passwordField" onAction="#tryToAuth" promptText="Пароль"/>
+        <Button fx:id="authLabel" onAction="#tryToAuth" text="Авторизоваться"/>
+    </HBox>
+    <HBox alignment="CENTER" fx:id="cloudPanel">
+        <VBox>
+            <padding>
+                <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+            </padding>
+            <Label GridPane.rowIndex="1" GridPane.columnIndex="0" text="Клиент" style="-fx-font: bold 16 Courier;"
+                   alignment="CENTER" maxWidth="Infinity"/>
+            <ListView fx:id="clientFilesList" GridPane.rowIndex="2" GridPane.columnIndex="0" maxHeight="Infinity">
+
+            </ListView>
+            <HBox GridPane.rowIndex="3" GridPane.columnIndex="0" alignment="CENTER">
+                <Button text="Отправить" onAction="#pressOnSendToCloudButton" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text="Удалить" onAction="#deleteFromClient" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+            </HBox>
+        </VBox>
+
+        <VBox>
+            <padding>
+                <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+            </padding>
+            <Label GridPane.rowIndex="1" GridPane.columnIndex="1" text="Сервер" style="-fx-font: bold 16 Courier;"
+                   alignment="CENTER" maxWidth="Infinity"/>
+            <ListView fx:id="serverFilesList" GridPane.rowIndex="2" GridPane.columnIndex="1" maxHeight="Infinity">
+
+            </ListView>
+            <HBox GridPane.rowIndex="3" GridPane.columnIndex="1" alignment="CENTER">
+                <Button text="Скачать" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                        onAction="#pressOnDownloadButton"/>
+                <Button text="Удалить" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                        onAction="#deleteFromServer"/>
+            </HBox>
+        </VBox>
+    </HBox>
+</VBox>
+
+
+package ru.geekbrains.netty.common;
+
+import java.io.Serializable;
+
+public abstract class AbstractMessage implements Serializable {
+}
+
+package ru.geekbrains.netty.common;
+
+public class AuthMessage extends AbstractMessage {
+
+    public String login;
+    public String password;
+    public String message;
+
+    public AuthMessage() {
+    }
+
+    public AuthMessage(String login, String password) {
+        this.login = login;
+        this.password = password;
+    }
+
+    public AuthMessage(String message) {
+        this.message = message;
+    }
+}
+package ru.geekbrains.netty.common;
+
+public class DeleteMessage extends AbstractMessage {
+    private String filename;
+
+    public DeleteMessage(String filename) {
+        this.filename = filename;
+    }
+
+    public String getFilename(){
+        return filename;
+    }
+
+}
+
+package ru.geekbrains.netty.common;
+
+public class DownloadMessage extends AbstractMessage {
+    private String filename;
+
+    public DownloadMessage(String filename) {
+        this.filename = filename;
+    }
+
+    public String getFilename() {
+        return filename;
+    }
+}
+
+package ru.geekbrains.netty.common;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class FileMessage extends AbstractMessage {
+    private String filename;
+    private byte[] data;
+
+    public String getFilename() {
+        return filename;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public FileMessage(Path path) throws IOException {
+        filename = path.getFileName().toString();
+        data = Files.readAllBytes(path);
+
+    }
+}
+
+package ru.geekbrains.netty.common;
+
+public class FileRequest extends AbstractMessage {
+    private String filename;
+
+    public String getFilename() {
+        return filename;
+    }
+
+    public FileRequest(String filename) {
+        this.filename = filename;
+    }
+}
+
+package ru.geekbrains.netty.common;
+
+import java.util.ArrayList;
+
+public class RefreshServerFileListMessage extends AbstractMessage {
+    private ArrayList<String> serverFileList;
+
+    public RefreshServerFileListMessage(ArrayList<String> serverFileList) {
+        this.serverFileList = serverFileList;
+    }
+
+    public RefreshServerFileListMessage() {
+    }
+
+    public ArrayList<String> getServerFileList() {
+        return serverFileList;
+    }
+}
+
+
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.serialization.ClassResolvers;
+import io.netty.handler.codec.serialization.ObjectDecoder;
+import io.netty.handler.codec.serialization.ObjectEncoder;
+
+public class Server {
+    public void run() throws Exception {
+        EventLoopGroup mainGroup = new NioEventLoopGroup();
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        try {
+            ServerBootstrap b = new ServerBootstrap();
+            b.group(mainGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        protected void initChannel(SocketChannel socketChannel) throws Exception {
+                            socketChannel.pipeline().addLast(
+                                    new ObjectDecoder(50 * 1024 * 1024, ClassResolvers.cacheDisabled(null)),
+                                    new ObjectEncoder(),
+                                    new AuthHandler()
+                            );
+                        }
+                    })
+                    .childOption(ChannelOption.SO_KEEPALIVE, true);
+            ChannelFuture future = b.bind(8189).sync();
+            DBConnection.connect();
+            System.out.println("server start");
+            future.channel().closeFuture().sync();
+
+        } finally {
+            mainGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+            DBConnection.disconnect();
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        new Server().run();
+    }
+}
+
+import ru.geekbrains.netty.common.*;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.ReferenceCountUtil;
+
+public class AuthHandler extends ChannelInboundHandlerAdapter {
+    private boolean authOk = false;
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object message) throws Exception {
+        try {
+            if (authOk) {
+                ctx.fireChannelRead(message);
+                return;
+            }
+            System.out.println(message.getClass());
+            if (message instanceof AuthMessage) {
+                AuthMessage authMessage = (AuthMessage) message;
+                String userId = DBConnection.getIdByLoginAndPass(authMessage.login, authMessage.password);
+                if (userId != null) {
+                    authOk = true;
+                    ctx.pipeline().addLast(new ServerMainHandler(userId));
+                    ctx.writeAndFlush(new AuthMessage("/authOk " + userId));
+                } else {
+                    ctx.writeAndFlush(new AuthMessage("/null_userId"));
+                }
+            }
+        } finally {
+            ReferenceCountUtil.release(message);
+        }
+    }
+
+    public void exeptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        cause.printStackTrace();
+        ctx.close();
+    }
+}
+
+import java.sql.*;
+
+class DBConnection {
+    private static Connection connection;
+    private static Statement stmt;
+
+    static  void connect() {
+        System.out.println("DB connection start");
+        try {
+            Class.forName("org.sqlite.JDBC");
+            connection = DriverManager.getConnection("jdbc:sqlite:users.db");
+            stmt = connection.createStatement();
+            System.out.println("DB connection start");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Connection error");
+        }
+    }
+
+    static String getIdByLoginAndPass(String login, String password) {
+        //   DBConnection db = new DBConnection();
+        //    db.connect();
+        String sql = String.format("SELECT nickname FROM main " + "WHERE login = '%s' AND password = '%s'", login, password);
+        try {
+            ResultSet resultSet = stmt.executeQuery(sql);
+            System.out.println(resultSet.getString(1));
+            if (resultSet.next()) {
+                return resultSet.getString(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    static void disconnect() {
+        try {
+            connection.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.ReferenceCountUtil;
+import ru.geekbrains.netty.common.*;
+
+import java.io.IOException;
+import java.nio.file.Files;
+
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+
+
+public class ServerMainHandler extends ChannelInboundHandlerAdapter {
+
+
+    private String nick;
+
+    public ServerMainHandler(String userId) {
+        this.nick = userId;
+    }
+
+    public void CannelActive(ChannelHandlerContext ctx) {
+        System.out.println("Подключился клиент" + nick);
+    }
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object message) throws Exception {
+        try {
+            ctx.writeAndFlush(new AuthMessage());
+            if (message.equals(null)) {
+                return;
+            }
+            if (message instanceof DownloadMessage) {
+                DownloadMessage downloadRequest = (DownloadMessage) message;
+                if (Files.exists(Paths.get("server_" + nick + "/" + downloadRequest.getFilename()))) {
+                    FileMessage fileMessage = new FileMessage(Paths.get("server_" + nick +
+                            "/" + downloadRequest.getFilename()));
+                    ctx.writeAndFlush(fileMessage);
+                }
+            }
+            if (message instanceof DeleteMessage) {
+                DeleteMessage deleteRequest = (DeleteMessage) message;
+                Files.delete(Paths.get("server_" + nick + "/" + deleteRequest.getFilename()));
+                refreshServerListVew(ctx);
+            }
+            if (message instanceof FileMessage) {
+                FileMessage fileMessage = (FileMessage) message;
+                Files.write(Paths.get("server_" + nick + "/" + fileMessage.getFilename()),
+                        fileMessage.getData(), StandardOpenOption.CREATE);
+                refreshServerListVew(ctx);
+
+            }
+        } finally {
+            ReferenceCountUtil.release(message);
+        }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        ctx.close();
+    }
+
+    private void refreshServerListVew(ChannelHandlerContext ctx) {
+        try {
+            ArrayList<String> serverFileList = new ArrayList<>();
+            Files.list(Paths.get("server_" + nick + "/")).map(p -> p.getFileName().toString()).forEach(serverFileList::add);
+            ctx.writeAndFlush(new RefreshServerFileListMessage(serverFileList));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}

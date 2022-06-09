@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<?import javafx.geometry.Insets?>
+
+
+<?import javafx.scene.shape.Line?>
+<?import javafx.scene.text.Text?>
+<VBox alignment="center" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/8.0.112-ea" fx:controller=
+        "ru.geekbrains.netty.client.MainController">
+
+    <HBox VBox.vgrow="ALWAYS" fx:id="authPanel">
+
+        <VBox>
+            <HBox>
+                <TextField fx:id="loginField" promptText="Логин" HBox.hgrow="ALWAYS"/>
+                <PasswordField fx:id="passwordField" onAction="#tryToAuth" promptText="Пароль"/>
+                <Button fx:id="authButton" onAction="#tryToAuth" text="Авторизоваться"/>
+            </HBox>
+        </VBox>
+        <VBox>
+            <HBox>
+                <TextField fx:id="loginField1" promptText="Логин" HBox.hgrow="ALWAYS"/>
+                <TextField fx:id="nickField" promptText="Ник (псевдоним)" HBox.hgrow="ALWAYS"/>
+            </HBox>
+
+            <HBox>
+                <PasswordField fx:id="passwordField1" onAction="#tryToAuth" promptText="Введите пароль"/>
+                <PasswordField fx:id="passwordField2" onAction="#tryToAuth" promptText="Повторите пароль"/>
+                <Button fx:id="registerButton" onAction="#registrationOnServer" text="Зарегестрироваться"/>
+            </HBox>
+        </VBox>
+
+    </HBox>
+
+    <HBox alignment="CENTER" fx:id="cloudPanel">
+        <VBox>
+            <padding>
+                <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+            </padding>
+            <Label GridPane.rowIndex="1" GridPane.columnIndex="0" text="Клиент" style="-fx-font: bold 16 Courier;"
+                   alignment="CENTER" maxWidth="Infinity"/>
+            <ListView fx:id="clientFilesList" GridPane.rowIndex="2" GridPane.columnIndex="0" maxHeight="Infinity">
+
+            </ListView>
+            <HBox GridPane.rowIndex="3" GridPane.columnIndex="0" alignment="CENTER">
+                <Button text="Зашифровать" onAction="#EncryptUserFile" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text="Дешифровать файл" onAction="#decryptUserFile" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text="Отправить" onAction="#pressOnSendToCloudButton" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text="Удалить" onAction="#deleteButton" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text="Открыть папку" onAction="#openUserFolder" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text="На главную" onAction="#returnOnMainWindow" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                <Button text ="Выход" onAction="#closeConnection" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+            </HBox>
+        </VBox>
+
+        <VBox>
+            <padding>
+                <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+            </padding>
+            <Label GridPane.rowIndex="1" GridPane.columnIndex="1" text="Сервер" style="-fx-font: bold 16 Courier;"
+                   alignment="CENTER" maxWidth="Infinity"/>
+            <ListView fx:id="serverFilesList" GridPane.rowIndex="2" GridPane.columnIndex="1" maxHeight="Infinity">
+
+            </ListView>
+            <HBox GridPane.rowIndex="3" GridPane.columnIndex="1" alignment="CENTER">
+                <Button text="Скачать" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                        onAction="#pressOnDownloadButton"/>
+                <Button text="Открыть папку на сервере" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                        onAction="#openServerFolder"/>
+                <Button text="Удалить" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                        onAction="#deleteFromServer"/>
+            </HBox>
+        </VBox>
+    </HBox>
+</VBox>
